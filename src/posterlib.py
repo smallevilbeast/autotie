@@ -117,6 +117,7 @@ class TiebaLib(Logger):
         return self.check_login(stage=stage+1)
     
     def sign_by_name(self, tieba_name):
+        # http://tieba.baidu.com/sign/loadmonth?kw=bpython&ie=utf-8
         data = {"ie": "utf-8", "kw" : tieba_name, "tbs" : self.get_common_tbs()}
         try:
             ret_data = self.api_request("sign/add", "POST", extra_data=data)
@@ -131,12 +132,13 @@ class TiebaLib(Logger):
         #     self.loginfo(u'签到成功! %s吧第 %d 个签到', tieba_name, ret_data['data']['finfo']['current_rank_info']['sign_count'])
         # return ret_data    
         
+        tieba_name = tieba_name.decode("utf-8", "ignore")    
         if not ret_data:
-            print tieba_name, "吧, 签到失败!"
+            print tieba_name, u"吧, 签到失败!"
         elif ret_data["error"] != "":    
             print tieba_name, ret_data["error"]
         else:    
-            print '签到成功!', tieba_name, '吧第 %d 个签到' % ret_data['data']['finfo']['current_rank_info']['sign_count']
+            print u'签到成功!', tieba_name, u'吧第 %d 个签到' % ret_data['data']['finfo']['current_rank_info']['sign_count']
         
     
     def json_myforum(self):
@@ -171,21 +173,39 @@ class TiebaLib(Logger):
         ret = self.api_request("f/user/sign_list?t=%s" % utils.timechecksum())
         return ret
     
+    def get_forum_id(self, tieba_name):
+        params = { "kw" : tieba_name, "ie" : "utf-8", "tbs" : self.get_common_tbs, "_" : utils.timestamp}
+        ret = self.api_request("sign/info", extra_data=params)
+        try:
+            return ret["data"]["forum_info"]["forum_info"]["forum_id"]
+        except:
+            try:
+                req = urllib2.Request("http://tieba.baidu.com/f?kw=%s" % tieba_name)
+                ret_value = self.opener.open(req).read()
+                fid = re.findall("fid:'(\d+)'", ret_value)
+                if fid:
+                    return fid[0]
+            except:    
+                return 0
+    
     def check_need_vcode(self, tieba_name):
-        params = {"rs1": 0, "rs10" : 1, "lm" : 1200065,
+        params = {"rs1": 0, "rs10" : 1, "lm" : self.get_forum_id(tieba_name),
                   "word" : tieba_name, "t" : utils.get_random_t()}
         ret = self.api_request("f/user/json_needvcode", extra_data=params)
-        if ret["data"]["need"] == 1:
-            vcode_ret = self.api_request(ret["data"]["vcodeUrl"])
-            vcodestr = vcode_ret["data"]["vcodestr"]
-            url = "http://tieba.baidu.com/cgi-bin/genimg?%s" % vcodestr
-            req = urllib2.Request(url)
-            ret_data = self.opener.open(req).read()
-            pic_image = utils.get_cache_file("vcode")
-            with open(pic_image, "wb") as fp:
-                fp.write(ret_data)
-            self.loginfo("Verify code pic download ok! save to %s", pic_image)
-            return raw_input("piz input code > ").strip()    
+        try:
+            if ret["data"]["need"] == 1:
+                vcode_ret = self.api_request(ret["data"]["vcodeUrl"])
+                vcodestr = vcode_ret["data"]["vcodestr"]
+                url = "http://tieba.baidu.com/cgi-bin/genimg?%s" % vcodestr
+                req = urllib2.Request(url)
+                ret_data = self.opener.open(req).read()
+                pic_image = utils.get_cache_file("vcode")
+                with open(pic_image, "wb") as fp:
+                    fp.write(ret_data)
+                self.loginfo("Verify code pic download ok! save to %s", pic_image)
+                return pic_image, vcodestr
+        except Exception, e:    
+            self.logdebug("Check newTie verify code faild, error: %s", e)
         return None
     
     def upload_pic(self, image_file):
@@ -204,9 +224,41 @@ class TiebaLib(Logger):
         req  = urllib2.Request(url, data=body, headers={"content-type": content_type})
         ret = self.opener.open(req).read()
         data = utils.parser_json(ret)
-        if data.has_key("info"):
-            return pic_url % (data["info"]["pic_id_encode"], img_ext)
-        return ""
+        try:
+            content = {"src" : pic_url % (data["info"]["pic_id_encode"], img_ext),
+                       "width" : data["info"]["fullpic_width"] if int(data["info"]["fullpic_width"]) <= 500 else 500,
+                       "height" : data["info"]["fullpic_height"] if int(data["info"]["fullpic_height"]) <= 450 else 450,
+                       "pic_type" : data["info"]["pic_type"]
+                       }
+            return content, data["info"]["full_sign1"]
+        except KeyError:
+            return False
+        
+    def new_tie(self, tieba_name, title, content, image_file=None, vedio=None, smiley=None):    
+        params = {}
+        vcode_ret = self.check_need_vcode(tieba_name)
+        
+        if vcode_ret is not None:
+            code = raw_input("vcode save to %s > " % vcode_ret[0]).strip()
+            params.update({"vcode" : code, "vcode_md5" : vcode_ret[1]})
+            
+        pic_dict = None
+        params.update({"kw" : tieba_name, "ie" : "utf-8", "rich_text" : 1, "floor_num" : 0,
+                  "tid" : 0, "fid" : self.get_forum_id(tieba_name), 
+                  "mouse_pwd_isclick" : 1, "mouse_pwd_t" : utils.timestamp,
+                  "anonymous" : 0, "tbs" : self.get_common_tbs(), 
+                  "title" : title})
+        
+        if image_file is not None:
+            pic_ret = self.upload_pic(image_file)
+            if pic_ret:
+                pic_dict = pic_ret[0]
+                params.update({"hasuploadpic": 1, "picsign" : pic_ret[1]})
+                
+        params.update({"content" : utils.format_content(content, pic_dict, vedio, smiley)})        
+        print params
+        ret = self.api_request("/f/commit/thread/add", "POST", extra_data=params)
+        print ret
             
     def get_verify_code(self):
         url = 'https://passport.baidu.com/v2/api/?logincheck&'         
@@ -288,6 +340,7 @@ class TiebaLib(Logger):
     
     def test(self):
         # ret_data = self.api_request("/i/sys/user_json?v=%s" % utils.timestamp())
+        # http://tieba.baidu.com/manager-apply/data/frs?dtype=json&ie=gbk&kw=bpython&fid=2196998&is_mgr=0&mgr_num=0&t=17b3ndkt9
         # ret_data = self.api_request("/i/commit", "POST", extra_data={"cmd" : "follow_all", "tbs": self.get_common_tbs()})
         pass
         
@@ -295,7 +348,13 @@ class TiebaLib(Logger):
 if __name__ == "__main__":    
     tieba_lib = TiebaLib(sys.argv[1], sys.argv[2])
     if tieba_lib.check_login():
-        print tieba_lib.upload_pic("/home/evilbeast/Pictures/psb.jpg")
+        tieba_lib.new_tie("bpython", "【bpython】我就不说什么了", "测试表情哈!", smiley=("tsj", "t_0013"))
+        
+        # print tieba_lib.upload_pic("/home/evilbeast/Pictures/psb.jpg")
         # tiebas =  tieba_lib.get_favorite_tiebas()
         # for t in tiebas:
-        #     tieba_lib.sign_by_name(t)
+        #     print t, "--->", tieba_lib.get_forum_id(t)
+
+        
+        
+        

@@ -71,3 +71,31 @@ def parser_json(raw):
         except:    
             data = {}
     return data    
+
+def format_pic(pic_dict):
+    header = '<IMG class=BDE_Image height={height} src=\"{src}\" width={width} pic_type=\"{pic_type}\">'
+    return header.format(**pic_dict)
+
+def format_link():
+    # <A href="%s" target=_blank>%s</A>
+    return 
+    
+def format_vedio(url):
+    return '<embed allowfullscreen="true" pluginspage="http://www.macromedia.com/go/getflashplayer" type="application/x-shockwave-flash" wmode="transparent" play="true" loop="false" menu="false" allowscriptaccess="never" scale="noborder" flashvars="adss=0" src="%s" class="BDE_Flash" width="500" height="450">' % url
+
+def format_content(content, pic_dict=None, vedio=None, smiley=None):
+    results = []
+    results.append(content)
+    if pic_dict is not None:
+        results.append(format_pic(pic_dict))
+    if vedio is not None:    
+        results.append(format_vedio(vedio))
+    if smiley:    
+        results.append(format_smiley_pic(smiley))
+    return "<br><br>".join(results)
+
+def format_smiley_pic(smiley):
+    return  '<IMG class=BDE_Smiley height=40 src="http://static.tieba.baidu.com/tb/editor/images/%s/%s.gif" width=40 pic_type="">'  % (smiley[0], smiley[1])
+
+
+
