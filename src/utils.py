@@ -19,11 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import time
 import string
 import urllib
 import hashlib
 import random
+
 
 try:
     import simplejson as json
@@ -34,6 +36,16 @@ from xdg_support import get_cache_file
 
 def timestamp():
     return int(time.time() * 1000)
+
+def get_parent_dir(filepath, level=1):
+    '''Get parent dir.'''
+    parent_dir = os.path.realpath(filepath)
+    
+    while(level > 0):
+        parent_dir = os.path.dirname(parent_dir)
+        level -= 1
+    
+    return parent_dir
 
 def get_random_t():
     return random.random()

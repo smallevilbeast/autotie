@@ -78,7 +78,7 @@ class EventRegister(object):
     InvalidEvent: some_undefined_event
     
     You can have lazy callbacks, too:
-        >>> events = EventRegister()
+    >>> events = EventRegister()
     >>> @events.some_signal
     ... def called_first():
     ...     print "First callback"
@@ -147,7 +147,6 @@ class EventRegister(object):
         Raises :exc:`InvalidEvent` if mode is strict and ``event`` is not
         defined in :attr:`__events__`.
         '''
-        
         if self.strict and event not in self.__events__:
             raise InvalidEvent(event)
         
@@ -162,7 +161,7 @@ class EventRegister(object):
                     
         for func in self.all_events_listener:            
             if func.lazy:
-                lazy_callbacks.append(partial(event, func))
+                lazy_callbacks.append(partial(func, event))
             else:    
                 func(event, *args, **kwargs)
                 

@@ -348,7 +348,8 @@ class TiebaLib(Logger):
 if __name__ == "__main__":    
     tieba_lib = TiebaLib(sys.argv[1], sys.argv[2])
     if tieba_lib.check_login():
-        tieba_lib.new_tie("bpython", "【bpython】我就不说什么了", "测试表情哈!", smiley=("tsj", "t_0013"))
+        print tieba_lib.get_user_portrait()
+        # tieba_lib.new_tie("bpython", "【bpython】我就不说什么了", "测试表情哈!", smiley=("tsj", "t_0013"))
         
         # print tieba_lib.upload_pic("/home/evilbeast/Pictures/psb.jpg")
         # tiebas =  tieba_lib.get_favorite_tiebas()
